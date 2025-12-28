@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CountOn – Discipline Clock</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root{
+    --bg:#020617;
+    --border:#1e293b;
+    --green:#22c55e;
+    --red:#ef4444;
+    --muted:#64748b;
+}
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    padding:16px;
+    background:var(--bg);
+    color:#e5e7eb;
+    font-family:system-ui,sans-serif;
+}
+
+h1{text-align:center;margin:0;font-size:28px}
+
+.top{
+    position:sticky;
+    top:0;
+    background:var(--bg);
+    z-index:10;
+    padding-bottom:10px;
+}
+
+.nav{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    margin:10px 0;
+}
+
+.nav button{
+    background:var(--bg);
+    border:1px solid var(--border);
+    color:#e5e7eb;
+    padding:6px 12px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+.big-score{
+    text-align:center;
+    font-size:56px;
+    font-weight:900;
+    color:var(--green);
+}
+
+.date{
+    text-align:center;
+    color:var(--muted);
+    margin-bottom:10px;
+}
+
+.hour{
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px;
+    margin-bottom:10px;
+    opacity:.45;
+}
+
+.hour.active{
+    opacity:1;
+    border:2px solid var(--green);
+    background:linear-gradient(180deg,rgba(34,197,94,.15),transparent);
+}
+
+.hour-title{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-weight:700;
+    margin-bottom:6px;
+}
+
+.countdown{
+    font-family:monospace;
+    font-size:20px;
+    color:var(--green);
+}
+
+textarea{
+    width:100%;
+    height:44px;
+    background:var(--bg);
+    border:1px solid var(--border);
+    color:#e5e7eb;
+    border-radius:6px;
+    padding:6px;
+}
+
+textarea:disabled{opacity:.6}
+
+.buttons{margin-top:6px}
+
+.buttons button{
+    padding:6px 12px;
+    border:none;
+    border-radius:6px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.did{background:var(--green);color:#020617}
+.not{background:var(--red);color:white}
+.buttons button:disabled{opacity:.5}
+
+.status{
+    margin-top:4px;
+    font-size:13px;
+}
+    
+.marquee-wrapper{
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: 48px;
+    background: linear-gradient(90deg,#020617,#020617);
+    border-bottom: 1px solid #1e293b;
+    overflow: hidden;
+}
+
+.marquee-track{
+    display: flex;
+    width: max-content;
+    animation: marqueeScroll 18s linear infinite;
+}
+
+.marquee-track span{
+    padding-right: 60px;
+    font-size: 15px;
+    letter-spacing: 4px;
+    font-weight: 600;
+    color: #e5e7eb;
+    text-shadow: 0 0 10px rgba(74,222,128,0.35);
+    white-space: nowrap;
+}
+
+@keyframes marqueeScroll{
+    from{
+        transform: translateX(0);
+    }
+    to{
+        transform: translateX(-33%);
+    }
+}
+</style>
+</head>
+
+<body>    
+    
+<div class="top">
+    <h1>CountOn</h1>
+    <div class="marquee-wrapper">
+    <div class="marquee-track">
+    <span>DISCIPLINE • CONSISTENCY • HARDWORK • </span>
+    <span>DISCIPLINE • CONSISTENCY • HARDWORK • </span>
+    <span>DISCIPLINE • CONSISTENCY • HARDWORK • </span>
+    </div>
+    </div>
+    <div class="nav">
+        <button onclick="changeDate(-1)">Yesterday</button>
+        <button onclick="goToday()">Today</button>
+        <button onclick="changeDate(1)">Tomorrow</button>
+    </div>
+    <div class="big-score" id="score">0%</div>
+    <div class="date" id="dateLabel"></div>
+</div>
+
+<div id="hours"></div>
+
+<script>
+const START=6, END=22;
+let currentDate=new Date();
+
+function key(d){return"counton_"+d.toISOString().split("T")[0]}
+function sameDay(a,b){return a.toDateString()===b.toDateString()}
+
+function hourState(date,h){
+    const now=new Date();
+    const s=new Date(date); s.setHours(h,0,0,0);
+    const e=new Date(date); e.setHours(h+1,0,0,0);
+    if(now>=e) return "past";
+    if(now>=s && now<e) return "current";
+    return "future";
+}
+
+function timeLeftMMSS(date,h){
+    const now=new Date();
+    const end=new Date(date);
+    end.setHours(h+1,0,0,0);
+    let diff=Math.max(0,Math.floor((end-now)/1000));
+    const m=String(Math.floor(diff/60)).padStart(2,"0");
+    const s=String(diff%60).padStart(2,"0");
+    return `${m}:${s}`;
+}
+
+function load(){
+    const data=JSON.parse(localStorage.getItem(key(currentDate)))||{};
+    const hoursDiv=document.getElementById("hours");
+    hoursDiv.innerHTML="";
+    document.getElementById("dateLabel").innerText=currentDate.toDateString();
+
+    let done=0,total=0;
+
+    for(let h=START;h<END;h++){
+        if(!data[h]) data[h]={plan:"",status:null};
+
+        const state=hourState(currentDate,h);
+        if(state==="past" && data[h].status===null){
+            data[h].status=false; // AUTO MARK NOT DID
+        }
+
+        const editable=sameDay(currentDate,new Date()) && state==="current";
+
+        const div=document.createElement("div");
+        div.className="hour"+(editable?" active":"");
+        div.dataset.hour=h;
+
+        div.innerHTML=`
+            <div class="hour-title">
+                <span>${h}:00 – ${h+1}:00</span>
+                ${editable?`<span class="countdown"></span>`:""}
+            </div>
+            <textarea ${editable?"":"disabled"}>${data[h].plan}</textarea>
+            <div class="buttons">
+                <button class="did" ${editable?"":"disabled"}>Did</button>
+                <button class="not" ${editable?"":"disabled"}>Not</button>
+            </div>
+            <div class="status"></div>
+        `;
+
+        div.querySelector("textarea").oninput=e=>{
+            data[h].plan=e.target.value;
+            save(data);
+        };
+
+        div.querySelector(".did").onclick=()=>{
+            data[h].status=true;
+            save(data); load();
+        };
+
+        div.querySelector(".not").onclick=()=>{
+            data[h].status=false;
+            save(data); load();
+        };
+
+        if(data[h].status!==null){
+            total++;
+            if(data[h].status) done++;
+            div.querySelector(".status").innerText=data[h].status?"Completed":"Missed";
+        }
+
+        hoursDiv.appendChild(div);
+    }
+
+    save(data);
+    document.getElementById("score").innerText=
+        total?Math.round(done/total*100)+"%":"0%";
+}
+
+function tick(){
+    document.querySelectorAll(".hour.active").forEach(div=>{
+        const h=parseInt(div.dataset.hour);
+        const cd=div.querySelector(".countdown");
+        if(cd) cd.innerText=timeLeftMMSS(currentDate,h);
+    });
+}
+
+function save(d){localStorage.setItem(key(currentDate),JSON.stringify(d))}
+function changeDate(n){currentDate.setDate(currentDate.getDate()+n);load()}
+function goToday(){currentDate=new Date();load()}
+
+load();
+setInterval(tick,1000);      // LIVE countdown
+setInterval(load,60000);    // Discipline enforcement
+</script>
+
+</body>
+</html>
